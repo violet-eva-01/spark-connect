@@ -34,6 +34,61 @@ func newReadTableRelation(table string) *proto.Relation {
 	}
 }
 
+func newReadTableRelationAndOptions(table string, options map[string]string) *proto.Relation {
+	return &proto.Relation{
+		Common: &proto.RelationCommon{
+			PlanId: newPlanId(),
+		},
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_NamedTable_{
+					NamedTable: &proto.Read_NamedTable{
+						UnparsedIdentifier: table,
+						Options:            options,
+					},
+				},
+			},
+		},
+	}
+}
+
+func newReadStreamTableRelation(table string) *proto.Relation {
+	return &proto.Relation{
+		Common: &proto.RelationCommon{
+			PlanId: newPlanId(),
+		},
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_NamedTable_{
+					NamedTable: &proto.Read_NamedTable{
+						UnparsedIdentifier: table,
+					},
+				},
+				IsStreaming: true,
+			},
+		},
+	}
+}
+
+func newReadStreamTableRelationAndOptions(table string, options map[string]string) *proto.Relation {
+	return &proto.Relation{
+		Common: &proto.RelationCommon{
+			PlanId: newPlanId(),
+		},
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_NamedTable_{
+					NamedTable: &proto.Read_NamedTable{
+						UnparsedIdentifier: table,
+						Options:            options,
+					},
+				},
+				IsStreaming: true,
+			},
+		},
+	}
+}
+
 func newReadWithFormatAndPath(path, format string) *proto.Relation {
 	return &proto.Relation{
 		RelType: &proto.Relation_Read{
@@ -60,6 +115,39 @@ func newReadWithFormatAndPathAndOptions(path, format string, options map[string]
 						Options: options,
 					},
 				},
+			},
+		},
+	}
+}
+
+func newReadStreamWithFormatAndPath(path, format string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format: &format,
+						Paths:  []string{path},
+					},
+				},
+				IsStreaming: true,
+			},
+		},
+	}
+}
+
+func newReadStreamWithFormatAndPathAndOptions(path, format string, options map[string]string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format:  &format,
+						Paths:   []string{path},
+						Options: options,
+					},
+				},
+				IsStreaming: true,
 			},
 		},
 	}

@@ -19,12 +19,8 @@ type DataFrameWriter interface {
 	SaveAsPath(ctx context.Context, path string) error
 	// SaveAsTable writes data frame to the table.
 	SaveAsTable(ctx context.Context, table string) error
-	SaveAsTableTable(ctx context.Context) error
-	// SaveAsTableV2 writes data frame to the table.
-	SaveAsTableV2(ctx context.Context, table string) error
-	SaveAsTableV2Table(ctx context.Context) error
+	Save(ctx context.Context) error
 	SaveAsStream(ctx context.Context) error
-	SaveAsStreamTable(ctx context.Context, table string) error
 	// Option set params
 	Option(key, value string) DataFrameWriter
 }
@@ -140,7 +136,7 @@ func (w *dataFrameWriterImpl) SaveAsTable(ctx context.Context, table string) err
 	return err
 }
 
-func (w *dataFrameWriterImpl) SaveAsTableTable(ctx context.Context) error {
+func (w *dataFrameWriterImpl) Save(ctx context.Context) error {
 	saveMode, err := getSavePathMode(w.saveMode)
 	if err != nil {
 		return err
@@ -200,91 +196,6 @@ func getSaveTableMode(mode string) (proto.WriteOperation_SaveTable_TableSaveMeth
 	}
 }
 
-func (w *dataFrameWriterImpl) SaveAsTableV2(ctx context.Context, table string) error {
-	saveTableMode, err := getSaveTableModeV2(w.saveMode)
-	if err != nil {
-		return err
-	}
-	var source *string
-	if w.formatSource != "" {
-		source = &w.formatSource
-	}
-	plan := &proto.Plan{
-		OpType: &proto.Plan_Command{
-			Command: &proto.Command{
-				CommandType: &proto.Command_WriteOperationV2{
-					WriteOperationV2: &proto.WriteOperationV2{
-						Input:     w.relation,
-						Options:   w.options,
-						TableName: table,
-						Provider:  source,
-						Mode:      saveTableMode,
-					},
-				},
-			},
-		},
-	}
-	responseClient, err := w.sparkExecutor.client.ExecutePlan(ctx, plan)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = responseClient.ToTable()
-	return err
-}
-
-func (w *dataFrameWriterImpl) SaveAsTableV2Table(ctx context.Context) error {
-	saveTableMode, err := getSaveTableModeV2(w.saveMode)
-	if err != nil {
-		return err
-	}
-	var source *string
-	if w.formatSource != "" {
-		source = &w.formatSource
-	}
-	plan := &proto.Plan{
-		OpType: &proto.Plan_Command{
-			Command: &proto.Command{
-				CommandType: &proto.Command_WriteOperationV2{
-					WriteOperationV2: &proto.WriteOperationV2{
-						Input:    w.relation,
-						Options:  w.options,
-						Provider: source,
-						Mode:     saveTableMode,
-					},
-				},
-			},
-		},
-	}
-	responseClient, err := w.sparkExecutor.client.ExecutePlan(ctx, plan)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = responseClient.ToTable()
-	return err
-}
-
-func getSaveTableModeV2(mode string) (proto.WriteOperationV2_Mode, error) {
-	if mode == "" {
-		return proto.WriteOperationV2_MODE_UNSPECIFIED, nil
-	} else if strings.EqualFold(mode, "Create") {
-		return proto.WriteOperationV2_MODE_CREATE, nil
-	} else if strings.EqualFold(mode, "Overwrite") {
-		return proto.WriteOperationV2_MODE_OVERWRITE, nil
-	} else if strings.EqualFold(mode, "OverwritePartition") {
-		return proto.WriteOperationV2_MODE_OVERWRITE_PARTITIONS, nil
-	} else if strings.EqualFold(mode, "Append") {
-		return proto.WriteOperationV2_MODE_APPEND, nil
-	} else if strings.EqualFold(mode, "Replace") {
-		return proto.WriteOperationV2_MODE_REPLACE, nil
-	} else if strings.EqualFold(mode, "CreateOrReplace") {
-		return proto.WriteOperationV2_MODE_CREATE_OR_REPLACE, nil
-	} else {
-		return 0, sparkerrors.WithType(fmt.Errorf("unsupported saveTableV2 mode: %s", mode), sparkerrors.InvalidInputError)
-	}
-}
-
 func (w *dataFrameWriterImpl) SaveAsStream(ctx context.Context) error {
 	var format string
 	if w.formatSource != "" {
@@ -300,39 +211,6 @@ func (w *dataFrameWriterImpl) SaveAsStream(ctx context.Context) error {
 						Format:  format,
 						Trigger: &proto.WriteStreamOperationStart_Once{
 							Once: true,
-						},
-					},
-				},
-			},
-		},
-	}
-	responseClient, err := w.sparkExecutor.client.ExecutePlan(ctx, plan)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = responseClient.ToTable()
-	return err
-}
-
-func (w *dataFrameWriterImpl) SaveAsStreamTable(ctx context.Context, table string) error {
-	var format string
-	if w.formatSource != "" {
-		format = w.formatSource
-	}
-	plan := &proto.Plan{
-		OpType: &proto.Plan_Command{
-			Command: &proto.Command{
-				CommandType: &proto.Command_WriteStreamOperationStart{
-					WriteStreamOperationStart: &proto.WriteStreamOperationStart{
-						Input:   w.relation,
-						Options: w.options,
-						Format:  format,
-						Trigger: &proto.WriteStreamOperationStart_Once{
-							Once: true,
-						},
-						SinkDestination: &proto.WriteStreamOperationStart_TableName{
-							TableName: table,
 						},
 					},
 				},

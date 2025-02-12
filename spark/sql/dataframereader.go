@@ -8,8 +8,10 @@ type DataFrameReader interface {
 	Format(source string) DataFrameReader
 	// Load reads the underlying data and returns a data frame.
 	Load(path string) (DataFrame, error)
-	// Reads a table from the underlying data source.
+	LoadStream(path string) (DataFrame, error)
+	// Table Reads a table from the underlying data source.
 	Table(name string) (DataFrame, error)
+	TableStream(name string) (DataFrame, error)
 	Option(key, value string) DataFrameReader
 }
 
@@ -28,7 +30,10 @@ func NewDataframeReader(session *sparkSessionImpl) DataFrameReader {
 }
 
 func (w *dataFrameReaderImpl) Table(name string) (DataFrame, error) {
-	return NewDataFrame(w.sparkSession, newReadTableRelation(name)), nil
+	if w.options == nil {
+		return NewDataFrame(w.sparkSession, newReadTableRelation(name)), nil
+	}
+	return NewDataFrame(w.sparkSession, newReadTableRelationAndOptions(name, w.options)), nil
 }
 
 func (w *dataFrameReaderImpl) Format(source string) DataFrameReader {
@@ -53,4 +58,22 @@ func (w *dataFrameReaderImpl) Option(key, value string) DataFrameReader {
 	}
 	w.options[key] = value
 	return w
+}
+
+func (w *dataFrameReaderImpl) LoadStream(path string) (DataFrame, error) {
+	var format string
+	if w.formatSource != "" {
+		format = w.formatSource
+	}
+	if w.options == nil {
+		return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(path, format)), nil
+	}
+	return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPathAndOptions(path, format, w.options)), nil
+}
+
+func (w *dataFrameReaderImpl) TableStream(name string) (DataFrame, error) {
+	if w.options == nil {
+		return NewDataFrame(w.sparkSession, newReadStreamTableRelation(name)), nil
+	}
+	return NewDataFrame(w.sparkSession, newReadStreamTableRelationAndOptions(name, w.options)), nil
 }
