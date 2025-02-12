@@ -13,7 +13,7 @@ import (
 	"github.com/violet-eva-01/spark-connect/spark/client/options"
 	"google.golang.org/grpc/metadata"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

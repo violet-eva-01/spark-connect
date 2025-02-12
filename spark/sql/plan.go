@@ -3,7 +3,7 @@ package sql
 import (
 	"sync/atomic"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 )
 
 var atomicInt64 atomic.Int64

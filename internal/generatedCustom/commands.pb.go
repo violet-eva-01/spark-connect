@@ -1,4 +1,4 @@
-package generated
+package generatedCustom
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// Verify that this generated code is sufficiently up-to-date.
+	// Verify that this generatedCustom code is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(20 - protoimpl.MinVersion)
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
@@ -1176,7 +1176,7 @@ type StreamingQueryInstanceId struct {
 	unknownFields protoimpl.UnknownFields
 
 	// (Required) The unique id of this query that persists across restarts from checkpoint data.
-	// That is, this id is generated when a query is started for the first time, and
+	// That is, this id is generatedCustom when a query is started for the first time, and
 	// will be the same every time it is restarted from checkpoint data.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// (Required) The unique id of this run of the query. That is, every start/restart of a query

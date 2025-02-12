@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"google.golang.org/grpc"
 )
 

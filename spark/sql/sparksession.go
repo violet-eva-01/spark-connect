@@ -21,7 +21,7 @@ import (
 	"github.com/violet-eva-01/spark-connect/spark/client/options"
 
 	"github.com/google/uuid"
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"github.com/violet-eva-01/spark-connect/spark/client"
 	"github.com/violet-eva-01/spark-connect/spark/client/channel"
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"

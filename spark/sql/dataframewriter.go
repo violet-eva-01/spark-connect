@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"
 )
 

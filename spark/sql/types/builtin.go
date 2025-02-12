@@ -3,7 +3,7 @@ package types
 import (
 	"context"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 )
 
 type LiteralType interface {

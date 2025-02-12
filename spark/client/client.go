@@ -22,8 +22,8 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/violet-eva-01/spark-connect/spark/sql/types"
 
-	"github.com/violet-eva-01/spark-connect/internal/generated"
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	"github.com/violet-eva-01/spark-connect/internal/generatedCustom"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"
 )
 
@@ -283,7 +283,7 @@ func (s *sparkConnectClientImpl) SemanticHash(ctx context.Context, plan *proto.P
 
 func (s *sparkConnectClientImpl) Config(ctx context.Context,
 	operation *proto.ConfigRequest_Operation,
-) (*generated.ConfigResponse, error) {
+) (*generatedCustom.ConfigResponse, error) {
 	request := &proto.ConfigRequest{
 		Operation: operation,
 		UserContext: &proto.UserContext{
@@ -304,7 +304,7 @@ func NewSparkExecutor(conn *grpc.ClientConn, md metadata.MD, sessionId string, o
 	if opts.ReattachExecution {
 		client = NewRetriableSparkConnectClient(conn, sessionId, opts)
 	} else {
-		client = generated.NewSparkConnectServiceClient(conn)
+		client = generatedCustom.NewSparkConnectServiceClient(conn)
 	}
 	return &sparkConnectClientImpl{
 		client:    client,
@@ -329,7 +329,7 @@ func NewSparkExecutorFromClient(client base.SparkConnectRPCClient, md metadata.M
 // Spark Connect.
 type ExecutePlanClient struct {
 	// The GRPC stream to read the response messages.
-	responseStream generated.SparkConnectService_ExecutePlanClient
+	responseStream generatedCustom.SparkConnectService_ExecutePlanClient
 	// The schema of the result of the operation.
 	schema *types.StructType
 	// The sessionId is ised to verify the server side session.

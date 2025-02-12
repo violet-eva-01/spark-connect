@@ -5,7 +5,7 @@ import (
 
 	"github.com/violet-eva-01/spark-connect/spark/sql/types"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 )
 
 // Convertible is the interface for all things that can be converted into a protobuf expression.

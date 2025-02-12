@@ -9,7 +9,7 @@ import (
 
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"
 
-	proto "github.com/violet-eva-01/spark-connect/internal/generated"
+	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 )
 
 func newProtoExpression() *proto.Expression {

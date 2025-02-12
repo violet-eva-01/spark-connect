@@ -96,7 +96,7 @@ func Isnull(col column.Column) column.Column {
 
 // MonotonicallyIncreasingId - A column that generates monotonically increasing 64-bit integers.
 //
-// The generated ID is guaranteed to be monotonically increasing and unique, but not consecutive.
+// The generatedCustom ID is guaranteed to be monotonically increasing and unique, but not consecutive.
 // The current implementation puts the partition ID in the upper 31 bits, and the record number
 // within each partition in the lower 33 bits. The assumption is that the data frame has
 // less than 1 billion partitions, and each partition has less than 8 billion records.
@@ -2921,7 +2921,7 @@ func Nvl2(col1 column.Column, col2 column.Column, col3 column.Column) column.Col
 // Key lengths of 16, 24 and 32 bits are supported. Supported combinations of (`mode`,
 // `padding`) are ('ECB', 'PKCS'), ('GCM', 'NONE') and ('CBC', 'PKCS'). Optional initialization
 // vectors (IVs) are only supported for CBC and GCM modes. These must be 16 bytes for CBC and 12
-// bytes for GCM. If not provided, a random vector will be generated and prepended to the
+// bytes for GCM. If not provided, a random vector will be generatedCustom and prepended to the
 // output. Optional additional authenticated data (AAD) is only supported for GCM. If provided
 // for encryption, the identical AAD value must be provided for decryption. The default mode is
 // GCM.

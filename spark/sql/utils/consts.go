@@ -1,6 +1,6 @@
 package utils
 
-import proto "github.com/violet-eva-01/spark-connect/internal/generated"
+import proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 
 type ExplainMode int
 
