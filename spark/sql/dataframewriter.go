@@ -17,6 +17,8 @@ type DataFrameWriter interface {
 	Format(source string) DataFrameWriter
 	// Save writes data frame to the given path.
 	Save(ctx context.Context, path string) error
+	// Option set params
+	Option(key, value string) DataFrameWriter
 }
 
 func newDataFrameWriter(sparkExecutor *sparkSessionImpl, relation *proto.Relation) DataFrameWriter {
