@@ -20,10 +20,9 @@ type DataFrameStreamQuery interface {
 	Explain(ctx context.Context, explain bool, explainMode utils.ExplainMode) (string, error)
 }
 
-func newDataFrameStreamQuery(sparkExecutor *sparkSessionImpl, relation *proto.Relation, id, runId string) DataFrameStreamQuery {
+func NewDataFrameStreamQuery(sparkExecutor *sparkSessionImpl, id, runId string) DataFrameStreamQuery {
 	return &dataFrameStreamQueryImpl{
 		sparkExecutor: sparkExecutor,
-		relation:      relation,
 		id:            id,
 		runId:         runId,
 	}
@@ -31,17 +30,8 @@ func newDataFrameStreamQuery(sparkExecutor *sparkSessionImpl, relation *proto.Re
 
 type dataFrameStreamQueryImpl struct {
 	sparkExecutor *sparkSessionImpl
-	relation      *proto.Relation
 	id            string
 	runId         string
-}
-
-func (w *dataFrameStreamQueryImpl) createPlan() *proto.Plan {
-	return &proto.Plan{
-		OpType: &proto.Plan_Root{
-			Root: w.relation,
-		},
-	}
 }
 
 func (w *dataFrameStreamQueryImpl) Status(ctx context.Context, status bool) (map[string]any, error) {

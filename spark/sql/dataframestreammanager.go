@@ -9,10 +9,9 @@ import (
 type DataFrameStreamManager interface {
 }
 
-func newDataFrameStreamManager(sparkExecutor *sparkSessionImpl, relation *proto.Relation) DataFrameStreamManager {
+func NewDataFrameStreamManager(sparkExecutor *sparkSessionImpl) DataFrameStreamManager {
 	return &dataFrameStreamManagerImpl{
 		sparkExecutor: sparkExecutor,
-		relation:      relation,
 	}
 }
 

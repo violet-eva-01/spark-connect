@@ -34,6 +34,8 @@ type SparkSession interface {
 	Sql(ctx context.Context, query string) (DataFrame, error)
 	Stop() error
 	Table(name string) (DataFrame, error)
+	StreamManager() DataFrameStreamManager
+	StreamQuery(id, runId string) DataFrameStreamQuery
 	CreateDataFrameFromArrow(ctx context.Context, data arrow.Table) (DataFrame, error)
 	CreateDataFrame(ctx context.Context, data [][]any, schema *types.StructType) (DataFrame, error)
 	Config() client.RuntimeConfig
@@ -116,6 +118,14 @@ func (s *sparkSessionImpl) Read() DataFrameReader {
 }
 
 func (s *sparkSessionImpl) ReadStream() DataFrameReaderStream { return newDataFrameReaderStream(s) }
+
+func (s *sparkSessionImpl) StreamQuery(id, runId string) DataFrameStreamQuery {
+	return NewDataFrameStreamQuery(s, id, runId)
+}
+
+func (s *sparkSessionImpl) StreamManager() DataFrameStreamManager {
+	return NewDataFrameStreamManager(s)
+}
 
 // Sql executes a sql query and returns the result as a DataFrame
 func (s *sparkSessionImpl) Sql(ctx context.Context, query string) (DataFrame, error) {
