@@ -30,6 +30,7 @@ import (
 
 type SparkSession interface {
 	Read() DataFrameReader
+	ReadStream() DataFrameReaderStream
 	Sql(ctx context.Context, query string) (DataFrame, error)
 	Stop() error
 	Table(name string) (DataFrame, error)
@@ -113,6 +114,8 @@ func (s *sparkSessionImpl) Config() client.RuntimeConfig {
 func (s *sparkSessionImpl) Read() DataFrameReader {
 	return NewDataframeReader(s)
 }
+
+func (s *sparkSessionImpl) ReadStream() DataFrameReaderStream { return newDataFrameReaderStream(s) }
 
 // Sql executes a sql query and returns the result as a DataFrame
 func (s *sparkSessionImpl) Sql(ctx context.Context, query string) (DataFrame, error) {
