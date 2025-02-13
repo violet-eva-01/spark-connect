@@ -7,9 +7,10 @@ type DataFrameReaderStream interface {
 	// Format specifies data format (data source type) for the underlying data, e.g. parquet.
 	Format(source string) DataFrameReaderStream
 	// Load reads the underlying data and returns a data frame.
-	Load(path string) (DataFrame, error)
+	Load() (DataFrame, error)
 	// Table Reads a table from the underlying data source.
 	Table(name string) (DataFrame, error)
+	Path(path string) DataFrameReaderStream
 	Option(key, value string) DataFrameReaderStream
 }
 
@@ -17,6 +18,7 @@ type DataFrameReaderStream interface {
 type dataFrameReaderStreamImpl struct {
 	sparkSession *sparkSessionImpl
 	formatSource string
+	path         string
 	options      map[string]string
 }
 
@@ -32,6 +34,11 @@ func (w *dataFrameReaderStreamImpl) Format(source string) DataFrameReaderStream 
 	return w
 }
 
+func (w *dataFrameReaderStreamImpl) Path(path string) DataFrameReaderStream {
+	w.path = path
+	return w
+}
+
 func (w *dataFrameReaderStreamImpl) Option(key, value string) DataFrameReaderStream {
 	if w.options == nil {
 		w.options = make(map[string]string)
@@ -40,15 +47,20 @@ func (w *dataFrameReaderStreamImpl) Option(key, value string) DataFrameReaderStr
 	return w
 }
 
-func (w *dataFrameReaderStreamImpl) Load(path string) (DataFrame, error) {
-	var format string
-	if w.formatSource != "" {
-		format = w.formatSource
+func (w *dataFrameReaderStreamImpl) Load() (DataFrame, error) {
+	if w.path == "" {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(w.path, w.formatSource)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPathAndOptions(w.path, w.formatSource, w.options)), nil
+		}
+	} else {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormat(w.formatSource)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndOptions(w.formatSource, w.options)), nil
+		}
 	}
-	if w.options == nil {
-		return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(path, format)), nil
-	}
-	return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPathAndOptions(path, format, w.options)), nil
 }
 
 func (w *dataFrameReaderStreamImpl) Table(name string) (DataFrame, error) {

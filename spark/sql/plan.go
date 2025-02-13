@@ -152,3 +152,34 @@ func newReadStreamWithFormatAndPathAndOptions(path, format string, options map[s
 		},
 	}
 }
+
+func newReadStreamWithFormat(format string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format: &format,
+					},
+				},
+				IsStreaming: true,
+			},
+		},
+	}
+}
+
+func newReadStreamWithFormatAndOptions(format string, options map[string]string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format:  &format,
+						Options: options,
+					},
+				},
+				IsStreaming: true,
+			},
+		},
+	}
+}
