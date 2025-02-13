@@ -41,8 +41,8 @@ func (w *dataFrameStreamQueryImpl) Status(ctx context.Context, status bool) (map
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_Status{
 							Status: status,
@@ -71,8 +71,8 @@ func (w *dataFrameStreamQueryImpl) LastProgress(ctx context.Context, lastProgres
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_LastProgress{
 							LastProgress: lastProgress,
@@ -101,8 +101,8 @@ func (w *dataFrameStreamQueryImpl) RecentProgress(ctx context.Context, recentPro
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_RecentProgress{
 							RecentProgress: recentProgress,
@@ -131,8 +131,8 @@ func (w *dataFrameStreamQueryImpl) Stop(ctx context.Context, stop bool) (map[str
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_Stop{
 							Stop: stop,
@@ -161,8 +161,8 @@ func (w *dataFrameStreamQueryImpl) ProcessAllAvailable(ctx context.Context, proc
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_ProcessAllAvailable{
 							ProcessAllAvailable: processAllAvailable,
@@ -191,8 +191,8 @@ func (w *dataFrameStreamQueryImpl) Explain(ctx context.Context, explain bool, ex
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_Explain{
 							Explain: &proto.StreamingQueryCommand_ExplainCommand{
@@ -218,8 +218,8 @@ func (w *dataFrameStreamQueryImpl) Exception(ctx context.Context, exception bool
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_Exception{
 							Exception: exception,
@@ -250,8 +250,8 @@ func (w *dataFrameStreamQueryImpl) AwaitTermination(ctx context.Context, timeout
 				CommandType: &proto.Command_StreamingQueryCommand{
 					StreamingQueryCommand: &proto.StreamingQueryCommand{
 						QueryId: &proto.StreamingQueryInstanceId{
-							Id:    "",
-							RunId: "",
+							Id:    w.id,
+							RunId: w.runId,
 						},
 						Command: &proto.StreamingQueryCommand_AwaitTermination{
 							AwaitTermination: &proto.StreamingQueryCommand_AwaitTerminationCommand{
