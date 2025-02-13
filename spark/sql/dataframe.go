@@ -259,6 +259,11 @@ type DataFrame interface {
 	Write() DataFrameWriter
 	// WriteResult streams the data frames to a result collector
 	WriteResult(ctx context.Context, collector ResultCollector, numRows int, truncate bool) error
+
+	ReaderStream() DataFrameReaderStream
+	WriterStream() DataFrameWriterStream
+	StreamManager() DataFrameStreamManager
+	StreamQuery(id, runId string) DataFrameStreamQuery
 }
 
 // dataFrameImpl is an implementation of DataFrame interface.
@@ -538,6 +543,22 @@ func (df *dataFrameImpl) Write() DataFrameWriter {
 
 func (df *dataFrameImpl) Writer() DataFrameWriter {
 	return newDataFrameWriter(df.session, df.relation)
+}
+
+func (df *dataFrameImpl) StreamManager() DataFrameStreamManager {
+	return newDataFrameStreamManager(df.session, df.relation)
+}
+
+func (df *dataFrameImpl) ReaderStream() DataFrameReaderStream {
+	return newDataFrameReaderStream(df.session)
+}
+
+func (df *dataFrameImpl) WriterStream() DataFrameWriterStream {
+	return newDataFrameWriterStream(df.session, df.relation)
+}
+
+func (df *dataFrameImpl) StreamQuery(id, runId string) DataFrameStreamQuery {
+	return newDataFrameStreamQuery(df.session, df.relation, id, runId)
 }
 
 func (df *dataFrameImpl) CreateTempView(ctx context.Context, viewName string, replace, global bool) error {

@@ -20,7 +20,6 @@ type DataFrameWriter interface {
 	// SaveAsTable writes data frame to the table.
 	SaveAsTable(ctx context.Context, table string) error
 	Save(ctx context.Context) error
-	SaveAsStream(ctx context.Context) error
 	// Option set params
 	Option(key, value string) DataFrameWriter
 }
@@ -194,34 +193,4 @@ func getSaveTableMode(mode string) (proto.WriteOperation_SaveTable_TableSaveMeth
 	} else {
 		return 0, sparkerrors.WithType(fmt.Errorf("unsupported save table mode: %s", mode), sparkerrors.InvalidInputError)
 	}
-}
-
-func (w *dataFrameWriterImpl) SaveAsStream(ctx context.Context) error {
-	var format string
-	if w.formatSource != "" {
-		format = w.formatSource
-	}
-	plan := &proto.Plan{
-		OpType: &proto.Plan_Command{
-			Command: &proto.Command{
-				CommandType: &proto.Command_WriteStreamOperationStart{
-					WriteStreamOperationStart: &proto.WriteStreamOperationStart{
-						Input:   w.relation,
-						Options: w.options,
-						Format:  format,
-						Trigger: &proto.WriteStreamOperationStart_Once{
-							Once: true,
-						},
-					},
-				},
-			},
-		},
-	}
-	responseClient, err := w.sparkExecutor.client.ExecutePlan(ctx, plan)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = responseClient.ToTable()
-	return err
 }

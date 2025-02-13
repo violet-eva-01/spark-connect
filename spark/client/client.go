@@ -399,6 +399,46 @@ func (c *ExecutePlanClient) ToTable() (*types.StructType, arrow.Table, error) {
 			recordBatches = append(recordBatches, record)
 		case *proto.ExecutePlanResponse_ResultComplete_:
 			c.done = true
+		case *proto.ExecutePlanResponse_StreamingQueryCommandResult:
+			c.properties["streaming_query_id"] = x.StreamingQueryCommandResult.GetQueryId().GetId()
+			c.properties["streaming_query_run_id"] = x.StreamingQueryCommandResult.GetQueryId().GetRunId()
+			c.properties["streaming_query_result"] = x.StreamingQueryCommandResult.GetResultType()
+			if val := x.StreamingQueryCommandResult.GetExplain(); val != nil {
+				c.properties["streaming_query_explain"] = val
+			}
+			if val := x.StreamingQueryCommandResult.GetAwaitTermination(); val != nil {
+				c.properties["streaming_query_await_termination"] = val
+			}
+			if val := x.StreamingQueryCommandResult.GetException(); val != nil {
+				c.properties["streaming_query_exception"] = val
+			}
+			if val := x.StreamingQueryCommandResult.GetRecentProgress(); val != nil {
+				c.properties["streaming_query_recent_progress"] = val
+			}
+			if val := x.StreamingQueryCommandResult.GetStatus(); val != nil {
+				c.properties["streaming_query_status"] = val
+			}
+		case *proto.ExecutePlanResponse_WriteStreamOperationStartResult:
+			c.properties["streaming_query_id"] = x.WriteStreamOperationStartResult.GetQueryId().GetId()
+			c.properties["streaming_query_run_id"] = x.WriteStreamOperationStartResult.GetQueryId().GetRunId()
+			c.properties["streaming_query_name"] = x.WriteStreamOperationStartResult.GetName()
+		case *proto.ExecutePlanResponse_StreamingQueryManagerCommandResult:
+			c.properties["streaming_query_result"] = x.StreamingQueryManagerCommandResult.GetResultType()
+			c.properties["streaming_query_add_listener"] = x.StreamingQueryManagerCommandResult.GetAddListener()
+			c.properties["streaming_query_remove_listener"] = x.StreamingQueryManagerCommandResult.GetRemoveListener()
+			c.properties["streaming_query_reset_terminated"] = x.StreamingQueryManagerCommandResult.GetResetTerminated()
+			if val := x.StreamingQueryManagerCommandResult.GetQuery(); val != nil {
+				c.properties["streaming_query_result"] = val
+			}
+			if val := x.StreamingQueryManagerCommandResult.GetActive(); val != nil {
+				c.properties["streaming_query_active"] = val
+			}
+			if val := x.StreamingQueryManagerCommandResult.GetAwaitAnyTermination(); val != nil {
+				c.properties["streaming_query_await_termination"] = val
+			}
+			if val := x.StreamingQueryManagerCommandResult.GetListListeners(); val != nil {
+				c.properties["streaming_query_list_listeners"] = val
+			}
 		default:
 			// Explicitly ignore messages that we cannot process at the moment.
 		}
