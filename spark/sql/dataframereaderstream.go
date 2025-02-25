@@ -10,7 +10,7 @@ type DataFrameReaderStream interface {
 	Load() (DataFrame, error)
 	// Table Reads a table from the underlying data source.
 	Table(name string) (DataFrame, error)
-	Path(path string) DataFrameReaderStream
+	Path(path ...string) DataFrameReaderStream
 	Option(key, value string) DataFrameReaderStream
 }
 
@@ -18,7 +18,7 @@ type DataFrameReaderStream interface {
 type dataFrameReaderStreamImpl struct {
 	sparkSession *sparkSessionImpl
 	formatSource string
-	path         string
+	path         []string
 	options      map[string]string
 }
 
@@ -34,8 +34,13 @@ func (w *dataFrameReaderStreamImpl) Format(source string) DataFrameReaderStream 
 	return w
 }
 
-func (w *dataFrameReaderStreamImpl) Path(path string) DataFrameReaderStream {
-	w.path = path
+func (w *dataFrameReaderStreamImpl) Path(path ...string) DataFrameReaderStream {
+	if len(path) == 0 {
+		w.path = path
+	} else {
+		w.path = append(w.path, path...)
+	}
+
 	return w
 }
 
@@ -48,7 +53,7 @@ func (w *dataFrameReaderStreamImpl) Option(key, value string) DataFrameReaderStr
 }
 
 func (w *dataFrameReaderStreamImpl) Load() (DataFrame, error) {
-	if w.path == "" {
+	if len(w.path) >= 0 {
 		if w.options == nil {
 			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(w.path, w.formatSource)), nil
 		} else {
