@@ -7,18 +7,20 @@ type DataFrameReader interface {
 	// Format specifies data format (data source type) for the underlying data, e.g. parquet.
 	Format(source string) DataFrameReader
 	// Load reads the underlying data and returns a data frame.
-	Load(path string) (DataFrame, error)
-	LoadStream(path string) (DataFrame, error)
+	Load() (DataFrame, error)
+	LoadStream() (DataFrame, error)
 	// Table Reads a table from the underlying data source.
 	Table(name string) (DataFrame, error)
 	TableStream(name string) (DataFrame, error)
 	Option(key, value string) DataFrameReader
+	Path(path ...string) DataFrameReader
 }
 
 // dataFrameReaderImpl is an implementation of DataFrameReader interface.
 type dataFrameReaderImpl struct {
 	sparkSession *sparkSessionImpl
 	formatSource string
+	path         []string
 	options      map[string]string
 }
 
@@ -41,15 +43,33 @@ func (w *dataFrameReaderImpl) Format(source string) DataFrameReader {
 	return w
 }
 
-func (w *dataFrameReaderImpl) Load(path string) (DataFrame, error) {
+func (w *dataFrameReaderImpl) Path(path ...string) DataFrameReader {
+	if len(w.path) > 0 {
+		w.path = append(w.path, path...)
+	} else {
+		w.path = path
+	}
+	return w
+}
+
+func (w *dataFrameReaderImpl) Load() (DataFrame, error) {
 	var format string
 	if w.formatSource != "" {
 		format = w.formatSource
 	}
-	if w.options == nil {
-		return NewDataFrame(w.sparkSession, newReadWithFormatAndPath(path, format)), nil
+	if len(w.path) > 0 {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadWithFormatAndPath(w.path, format)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadWithFormatAndPathAndOptions(w.path, format, w.options)), nil
+		}
+	} else {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadWithFormat(format)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadWithFormatAndOptions(format, w.options)), nil
+		}
 	}
-	return NewDataFrame(w.sparkSession, newReadWithFormatAndPathAndOptions(path, format, w.options)), nil
 }
 
 func (w *dataFrameReaderImpl) Option(key, value string) DataFrameReader {
@@ -60,15 +80,24 @@ func (w *dataFrameReaderImpl) Option(key, value string) DataFrameReader {
 	return w
 }
 
-func (w *dataFrameReaderImpl) LoadStream(path string) (DataFrame, error) {
+func (w *dataFrameReaderImpl) LoadStream() (DataFrame, error) {
 	var format string
 	if w.formatSource != "" {
 		format = w.formatSource
 	}
-	if w.options == nil {
-		return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(path, format)), nil
+	if len(w.path) > 0 {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPath(w.path, format)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPathAndOptions(w.path, format, w.options)), nil
+		}
+	} else {
+		if w.options == nil {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormat(format)), nil
+		} else {
+			return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndOptions(format, w.options)), nil
+		}
 	}
-	return NewDataFrame(w.sparkSession, newReadStreamWithFormatAndPathAndOptions(path, format, w.options)), nil
 }
 
 func (w *dataFrameReaderImpl) TableStream(name string) (DataFrame, error) {

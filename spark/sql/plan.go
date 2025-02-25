@@ -89,14 +89,13 @@ func newReadStreamTableRelationAndOptions(table string, options map[string]strin
 	}
 }
 
-func newReadWithFormatAndPath(path, format string) *proto.Relation {
+func newReadWithFormat(format string) *proto.Relation {
 	return &proto.Relation{
 		RelType: &proto.Relation_Read{
 			Read: &proto.Read{
 				ReadType: &proto.Read_DataSource_{
 					DataSource: &proto.Read_DataSource{
 						Format: &format,
-						Paths:  []string{path},
 					},
 				},
 			},
@@ -104,14 +103,13 @@ func newReadWithFormatAndPath(path, format string) *proto.Relation {
 	}
 }
 
-func newReadWithFormatAndPathAndOptions(path, format string, options map[string]string) *proto.Relation {
+func newReadWithFormatAndOptions(format string, options map[string]string) *proto.Relation {
 	return &proto.Relation{
 		RelType: &proto.Relation_Read{
 			Read: &proto.Read{
 				ReadType: &proto.Read_DataSource_{
 					DataSource: &proto.Read_DataSource{
 						Format:  &format,
-						Paths:   []string{path},
 						Options: options,
 					},
 				},
@@ -120,14 +118,45 @@ func newReadWithFormatAndPathAndOptions(path, format string, options map[string]
 	}
 }
 
-func newReadStreamWithFormatAndPath(path, format string) *proto.Relation {
+func newReadWithFormatAndPath(path []string, format string) *proto.Relation {
 	return &proto.Relation{
 		RelType: &proto.Relation_Read{
 			Read: &proto.Read{
 				ReadType: &proto.Read_DataSource_{
 					DataSource: &proto.Read_DataSource{
 						Format: &format,
-						Paths:  []string{path},
+						Paths:  path,
+					},
+				},
+			},
+		},
+	}
+}
+
+func newReadWithFormatAndPathAndOptions(path []string, format string, options map[string]string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format:  &format,
+						Paths:   path,
+						Options: options,
+					},
+				},
+			},
+		},
+	}
+}
+
+func newReadStreamWithFormatAndPath(path []string, format string) *proto.Relation {
+	return &proto.Relation{
+		RelType: &proto.Relation_Read{
+			Read: &proto.Read{
+				ReadType: &proto.Read_DataSource_{
+					DataSource: &proto.Read_DataSource{
+						Format: &format,
+						Paths:  path,
 					},
 				},
 				IsStreaming: true,
@@ -136,14 +165,14 @@ func newReadStreamWithFormatAndPath(path, format string) *proto.Relation {
 	}
 }
 
-func newReadStreamWithFormatAndPathAndOptions(path, format string, options map[string]string) *proto.Relation {
+func newReadStreamWithFormatAndPathAndOptions(path []string, format string, options map[string]string) *proto.Relation {
 	return &proto.Relation{
 		RelType: &proto.Relation_Read{
 			Read: &proto.Read{
 				ReadType: &proto.Read_DataSource_{
 					DataSource: &proto.Read_DataSource{
 						Format:  &format,
-						Paths:   []string{path},
+						Paths:   path,
 						Options: options,
 					},
 				},
