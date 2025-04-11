@@ -259,7 +259,10 @@ type DataFrame interface {
 	Write() DataFrameWriter
 	// WriteResult streams the data frames to a result collector
 	WriteResult(ctx context.Context, collector ResultCollector, numRows int, truncate bool) error
-
+	ToMap(ctx context.Context) ([]map[string]interface{}, error)
+	ToMapString(ctx context.Context) ([]map[string]string, error)
+	CollectBatchProcessingForMap(ctx context.Context, batchSize int, function ...func(input []map[string]interface{}) error) (err error)
+	CollectBatchProcessingForMapString(ctx context.Context, batchSize int, function ...func(input []map[string]string) error) (err error)
 	WriterStream() DataFrameWriterStream
 }
 
@@ -267,6 +270,115 @@ type DataFrame interface {
 type dataFrameImpl struct {
 	session  *sparkSessionImpl
 	relation *proto.Relation // TODO change to proto.Plan?
+}
+
+func (df *dataFrameImpl) ToMap(ctx context.Context) ([]map[string]interface{}, error) {
+	collect, err := df.Collect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]interface{}
+	for _, row := range collect {
+		record := make(map[string]interface{})
+		for _, name := range row.FieldNames() {
+			record[name] = row.Value(name)
+		}
+		rows = append(rows, record)
+	}
+	return rows, nil
+}
+
+func (df *dataFrameImpl) ToMapString(ctx context.Context) ([]map[string]string, error) {
+	collect, err := df.Collect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]string
+	for _, row := range collect {
+		record := make(map[string]string)
+		for _, name := range row.FieldNames() {
+			record[name] = fmt.Sprintf("%v", row.Value(name))
+		}
+		rows = append(rows, record)
+	}
+	return rows, nil
+}
+
+func (df *dataFrameImpl) CollectBatchProcessingForMap(ctx context.Context, batchSize int, function ...func(input []map[string]interface{}) error) (err error) {
+	var collect []types.Row
+
+	collect, err = df.Collect(ctx)
+	if err != nil {
+		return err
+	}
+
+	var rows []map[string]interface{}
+	for index, row := range collect {
+		record := make(map[string]interface{})
+		for _, name := range row.FieldNames() {
+			record[name] = row.Value(name)
+		}
+		rows = append(rows, record)
+		if (index+1)%batchSize == 0 {
+			for _, fun := range function {
+				err = fun(rows)
+				if err != nil {
+					return err
+				}
+			}
+			rows = rows[:0]
+		}
+	}
+
+	if len(rows) > 0 {
+		for _, fun := range function {
+			err = fun(rows)
+			if err != nil {
+				return err
+			}
+		}
+		rows = rows[:0]
+	}
+
+	return
+}
+
+func (df *dataFrameImpl) CollectBatchProcessingForMapString(ctx context.Context, batchSize int, function ...func(input []map[string]string) error) (err error) {
+	var collect []types.Row
+
+	collect, err = df.Collect(ctx)
+	if err != nil {
+		return err
+	}
+
+	var rows []map[string]string
+	for index, row := range collect {
+		record := make(map[string]string)
+		for _, name := range row.FieldNames() {
+			record[name] = fmt.Sprintf("%v", row.Value(name))
+		}
+		rows = append(rows, record)
+		if (index+1)%batchSize == 0 {
+			for _, fun := range function {
+				err = fun(rows)
+				if err != nil {
+					return err
+				}
+			}
+			rows = rows[:0]
+		}
+	}
+
+	if len(rows) > 0 {
+		for _, fun := range function {
+			err = fun(rows)
+			if err != nil {
+				return err
+			}
+		}
+		rows = rows[:0]
+	}
+	return
 }
 
 func (df *dataFrameImpl) Coalesce(ctx context.Context, numPartitions int) DataFrame {
