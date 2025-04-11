@@ -61,6 +61,7 @@ type BaseBuilder struct {
 	headers   map[string]string
 	sessionId string
 	userAgent string
+	clientIP  string
 	conn      *grpc.ClientConn
 }
 
@@ -186,6 +187,9 @@ func NewBuilder(connection string) (*BaseBuilder, error) {
 				cb.token = props[1]
 			} else if props[0] == "user_id" {
 				cb.user = props[1]
+			} else if props[0] == "user_name" {
+				cb.user = props[1]
+				cb.headers[props[0]] = props[1]
 			} else if props[0] == "session_id" {
 				cb.sessionId = props[1]
 			} else if props[0] == "user_agent" {
@@ -204,6 +208,12 @@ func NewBuilder(connection string) (*BaseBuilder, error) {
 		}
 	}
 
+	if cb.clientIP == "" {
+		if cb.clientIP = getClientIp(); cb.clientIP == "" {
+			cb.clientIP = "127.0.0.1"
+		}
+	}
+
 	// Update the user agent if it is not set or set to a custom value.
 	val := os.Getenv("SPARK_CONNECT_USER_AGENT")
 	if cb.userAgent == "" && val != "" {
@@ -217,4 +227,13 @@ func NewBuilder(connection string) (*BaseBuilder, error) {
 	cb.userAgent = fmt.Sprintf("%s spark/%s os/%s go/%s", cb.userAgent, spark.Version(), runtime.GOOS, runtime.Version())
 
 	return cb, nil
+}
+
+func getClientIp() string {
+	dial, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	localAddr := dial.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }

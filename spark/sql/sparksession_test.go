@@ -56,11 +56,6 @@ func TestDDL(t *testing.T) {
 	if err = dataFrame.Show(context.Background(), 100, false); err != nil {
 		t.Fatal(err)
 	}
-	output, err := sql.ExecQueryToMapString(context.Background(), "desc test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(output)
 }
 
 type Water struct {
