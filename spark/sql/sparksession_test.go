@@ -4,9 +4,24 @@ package sql
 import (
 	"context"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
+
+func TestTime(t *testing.T) {
+	a := "2025-07-17 15:49:59.330808 +0800 CST"
+	t2, err2 := time.Parse(time.DateTime, a)
+	if err2 != nil {
+		log.Println(err2)
+	}
+	fmt.Println(t2)
+	parse, err := time.Parse("2006-01-02 15:04:05.999999 Z0700 MST", a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(parse)
+}
 
 func TestDDL(t *testing.T) {
 	params := make(map[string]string)

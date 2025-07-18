@@ -7,24 +7,22 @@ import (
 	"google.golang.org/grpc"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/apache/arrow-go/v18/arrow/memory"
-	"github.com/violet-eva-01/spark-connect/spark/sql/types"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
-	"github.com/violet-eva-01/spark-connect/spark/client/base"
-
-	"github.com/violet-eva-01/spark-connect/spark/client/options"
-
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/google/uuid"
 	proto "github.com/violet-eva-01/spark-connect/internal/generatedCustom"
 	"github.com/violet-eva-01/spark-connect/spark/client"
+	"github.com/violet-eva-01/spark-connect/spark/client/base"
 	"github.com/violet-eva-01/spark-connect/spark/client/channel"
+	"github.com/violet-eva-01/spark-connect/spark/client/options"
 	"github.com/violet-eva-01/spark-connect/spark/sparkerrors"
+	"github.com/violet-eva-01/spark-connect/spark/sql/types"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -40,7 +38,6 @@ type SparkSession interface {
 	CreateDataFrame(ctx context.Context, data [][]any, schema *types.StructType) (DataFrame, error)
 	Config() client.RuntimeConfig
 	CreateDataFrameFromStruct(ctx context.Context, data any, isRename bool) (DataFrame, error)
-	CreateDataFrameFromMap(ctx context.Context, v interface{}, isTag bool, isRename bool, data ...map[string]interface{}) (DataFrame, error)
 }
 
 // NewSessionBuilder creates a new session builder for starting a new spark session
@@ -266,7 +263,7 @@ func (s *sparkSessionImpl) CreateDataFrame(ctx context.Context, data [][]any, sc
 			case types.LONG:
 				rb.Field(i).(*array.Int64Builder).Append(int64(row[i].(int)))
 			case types.FLOAT:
-				rb.Field(i).(*array.Float32Builder).Append(float32(row[i].(float32)))
+				rb.Field(i).(*array.Float32Builder).Append(row[i].(float32))
 			case types.DOUBLE:
 				rb.Field(i).(*array.Float64Builder).Append(row[i].(float64))
 			case types.STRING:
@@ -416,9 +413,9 @@ func convStructTags(data any, tagName string, isGetType bool, splitKey ...string
 }
 
 // structToStructType
-// @Description: isTag is false , get struct elem name assign to structField name. isTag is true  , get json tag name assign to structField name.
+// @Description: isRename is false , get struct elem name convert to snake_case assign to structField name.isRename is true  , get spark tag name assign to structField name.
 // @param v
-// @param isTag
+// @param isRename
 // @return *types.StructType
 // @return error
 func structToStructType(v interface{}, isRename bool) (*types.StructType, error) {
@@ -438,45 +435,90 @@ func structToStructType(v interface{}, isRename bool) (*types.StructType, error)
 		var filed types.StructField
 		if isRename {
 			filed.Name = sparkTags[tf.Field(i).Name]
-			if filed.Name == "" {
-				filed.Name = tf.Field(i).Name
-			}
-		} else {
+		}
+		if filed.Name == "" {
 			filed.Name = tf.Field(i).Name
 		}
-		switch vt := vf.Field(i).Interface().(type) {
-		case int:
-			switch runtime.GOARCH {
-			case "386", "arm":
+		if sparkTypeTag := tf.Field(i).Tag.Get("sparkType"); sparkTypeTag != "" {
+			tagValue := strings.Split(sparkTypeTag, ",")
+			sparkType := tagValue[0]
+			switch sparkType {
+			case "bool":
+				filed.DataType = types.BOOLEAN
+			case "int":
+				switch runtime.GOARCH {
+				case "386", "arm":
+					filed.DataType = types.INTEGER
+				default:
+					filed.DataType = types.LONG
+				}
+			case "int8":
+				filed.DataType = types.BYTE
+			case "int16":
+				filed.DataType = types.SHORT
+			case "int32":
 				filed.DataType = types.INTEGER
-			default:
+			case "int64":
 				filed.DataType = types.LONG
-			}
-		case bool:
-			filed.DataType = types.BOOLEAN
-		case int8:
-			filed.DataType = types.BYTE
-		case int16:
-			filed.DataType = types.SHORT
-		case int32:
-			filed.DataType = types.INTEGER
-		case int64:
-			filed.DataType = types.LONG
-		case float32:
-			filed.DataType = types.FLOAT
-		case float64:
-			filed.DataType = types.DOUBLE
-		case string:
-			filed.DataType = types.STRING
-		case time.Time:
-			tag := tf.Field(i).Tag.Get("type")
-			if tag == "timestamp" {
-				filed.DataType = types.TIMESTAMP
-			} else {
+			case "float32", "float":
+				filed.DataType = types.FLOAT
+			case "float64", "double":
+				filed.DataType = types.DOUBLE
+			case "string":
+				filed.DataType = types.STRING
+			case "date":
 				filed.DataType = types.DATE
+				if len(tagValue) > 1 {
+					filed.TimeFormat = tagValue[1]
+				}
+			case "timestamp":
+				filed.DataType = types.TIMESTAMP
+				if len(tagValue) > 1 {
+					filed.TimeFormat = tagValue[1]
+				}
+				if len(tagValue) > 2 {
+					switch tagValue[2] {
+					case "ns":
+						filed.TU = arrow.Nanosecond
+					case "us":
+						filed.TU = arrow.Microsecond
+					case "ms":
+						filed.TU = arrow.Millisecond
+					default:
+						filed.TU = arrow.Second
+					}
+				}
 			}
-		default:
-			panic(fmt.Errorf("unsupported data type: %s", vt))
+		} else {
+			switch vt := vf.Field(i).Interface().(type) {
+			case int:
+				switch runtime.GOARCH {
+				case "386", "arm":
+					filed.DataType = types.INTEGER
+				default:
+					filed.DataType = types.LONG
+				}
+			case bool:
+				filed.DataType = types.BOOLEAN
+			case int8:
+				filed.DataType = types.BYTE
+			case int16:
+				filed.DataType = types.SHORT
+			case int32:
+				filed.DataType = types.INTEGER
+			case int64:
+				filed.DataType = types.LONG
+			case float32:
+				filed.DataType = types.FLOAT
+			case float64:
+				filed.DataType = types.DOUBLE
+			case string:
+				filed.DataType = types.STRING
+			case time.Time:
+				filed.DataType = types.TIMESTAMP
+			default:
+				panic(fmt.Errorf("unsupported data type: %s", vt))
+			}
 		}
 		filed.Metadata = nil
 		filed.Nullable = true
@@ -543,127 +585,11 @@ func (s *sparkSessionImpl) CreateDataFrameFromStruct(ctx context.Context, data a
 	return s.createDataFrame(ctx, sliceAny, structType)
 }
 
-func convStructDoubleTags(data any, tagName1, tagName2 string, splitKey ...[2]string) map[string]string {
-	valueOf := reflect.ValueOf(data)
-	if valueOf.Kind() == reflect.Ptr {
-		valueOf = valueOf.Elem()
-	}
-	if valueOf.Kind() != reflect.Struct {
-		return nil
-	}
-	output := make(map[string]string, valueOf.NumField())
-	if len(splitKey) > 0 {
-		for i := 0; i < valueOf.NumField(); i++ {
-			var (
-				tag1Name string
-				tag2Name string
-			)
-			field := valueOf.Type().Field(i)
-			tag := field.Tag
-			tag1Value := tag.Get(tagName1)
-			if tag1Value != "" {
-				splitValue := strings.Split(tag1Value, ",")
-				for _, Value := range splitValue {
-					if strings.HasPrefix(Value, splitKey[0][0]) {
-						tag1Name = strings.TrimPrefix(Value, splitKey[0][0])
-					}
-				}
-			}
-			tag2Value := tag.Get(tagName2)
-			if tag2Value != "" {
-				splitValue := strings.Split(tag1Value, ",")
-				for _, Value := range splitValue {
-					if strings.HasPrefix(Value, splitKey[0][0]) {
-						tag2Name = strings.TrimPrefix(Value, splitKey[0][0])
-					}
-				}
-			}
-			output[tag1Name] = tag2Name
-		}
-	} else {
-		for i := 0; i < valueOf.NumField(); i++ {
-			field := valueOf.Type().Field(i)
-			tag := field.Tag
-			tag1Value := tag.Get(tagName1)
-			if tag1Value == "" {
-				tag1Value = field.Name
-			}
-			tag2Value := tag.Get(tagName2)
-			output[tag1Value] = tag2Value
-		}
-	}
-	return output
-}
-
-func mapTurnOver(input map[string]string) map[string]string {
-	var output = make(map[string]string, len(input))
-	for key, value := range input {
-		output[value] = key
-	}
-	return output
-}
-
-func mapToSliceAny(structType *types.StructType, v interface{}, isTag bool, isRename bool, data ...map[string]interface{}) ([][]interface{}, error) {
-	var (
-		mappingTags map[string]string
-	)
-	length := len(structType.Fields)
-	if isTag && isRename {
-		mappingTags = convStructDoubleTags(v, "spark", "json")
-	} else if isRename {
-		mappingTags = convStructTags(v, "spark", false)
-		mappingTags = mapTurnOver(mappingTags)
-	} else if isTag {
-		mappingTags = convStructTags(v, "json", false)
-	}
-	var rows [][]interface{}
-	for _, row := range data {
-		var record []interface{}
-		for i := 0; i < length; i++ {
-			var rec interface{}
-			if len(mappingTags) > 0 {
-				rec = row[mappingTags[structType.Fields[i].Name]]
-				if rec == nil && !isTag {
-					rec = row[structType.Fields[i].Name]
-				}
-			} else {
-				rec = row[structType.Fields[i].Name]
-			}
-			record = append(record, rec)
-		}
-		rows = append(rows, record)
-	}
-	return rows, nil
-}
-
-// CreateDataFrameFromMap
-// @Description: []map[string]interface{} -> sql.DataFrame , map
-// @param ctx
-// @param v
-// @param isTag true ,Assign values to dataframes based on JSON tags. false, Assign values to dataframes based on elem name. This field is because it is not possible to ignore the case match to the value, and the field is added.
-// @param isRename  true ,Rename the dataframe based on the spark tag , Insufficient tags are supplemented by elem name
-// @param data
-// @return sql.DataFrame
-// @return error
-func (s *sparkSessionImpl) CreateDataFrameFromMap(ctx context.Context, v interface{}, isTag bool, isRename bool, data ...map[string]interface{}) (DataFrame, error) {
-	structType, err := structToStructType(v, isRename)
-	if err != nil {
-		return nil, err
-	}
-	sliceAny, err := mapToSliceAny(structType, v, isTag, isRename, data...)
-	if err != nil {
-		return nil, err
-	}
-	return s.createDataFrame(ctx, sliceAny, structType)
-}
-
 func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, schema *types.StructType) (DataFrame, error) {
 	pool := memory.NewGoAllocator()
-	// Convert the data into an Arrow Table
 	arrowSchema := arrow.NewSchema(schema.ToArrowType().Fields(), nil)
 	rb := array.NewRecordBuilder(pool, arrowSchema)
 	defer rb.Release()
-	// Iterate over all fields and add the values:
 	for _, row := range data {
 		for i, field := range schema.Fields {
 			if row[i] == nil {
@@ -672,38 +598,114 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 			}
 			switch field.DataType {
 			case types.BOOLEAN:
-				rb.Field(i).(*array.BooleanBuilder).Append(row[i].(bool))
+				rowData, ok := row[i].(bool)
+				if !ok {
+					parseBool, err := strconv.ParseBool(fmt.Sprintf("%v", row[i]))
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to bool failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = parseBool
+				}
+				rb.Field(i).(*array.BooleanBuilder).Append(rowData)
 			case types.BYTE:
-				rb.Field(i).(*array.Int8Builder).Append(row[i].(int8))
+				rowData, ok := row[i].(int8)
+				if !ok {
+					parseByte, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 8)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to int8 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = int8(parseByte)
+				}
+				rb.Field(i).(*array.Int8Builder).Append(rowData)
 			case types.SHORT:
-				rb.Field(i).(*array.Int16Builder).Append(row[i].(int16))
+				rowData, ok := row[i].(int16)
+				if !ok {
+					parseShort, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 16)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to int16 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = int16(parseShort)
+				}
+				rb.Field(i).(*array.Int16Builder).Append(rowData)
 			case types.INTEGER:
-				switch row[i].(type) {
-				case int:
-					rb.Field(i).(*array.Int32Builder).Append(int32(row[i].(int)))
-				default:
-					rb.Field(i).(*array.Int32Builder).Append(row[i].(int32))
+				rowData, ok := row[i].(int32)
+				if !ok {
+					parseInt, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 32)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to int32 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = int32(parseInt)
 				}
+				rb.Field(i).(*array.Int32Builder).Append(rowData)
 			case types.LONG:
-				switch row[i].(type) {
-				case int:
-					rb.Field(i).(*array.Int64Builder).Append(int64(row[i].(int)))
-				default:
-					rb.Field(i).(*array.Int64Builder).Append(row[i].(int64))
+				rowData, ok := row[i].(int64)
+				if !ok {
+					parseLong, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 64)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to int64 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = parseLong
 				}
+				rb.Field(i).(*array.Int64Builder).Append(rowData)
 			case types.FLOAT:
-				rb.Field(i).(*array.Float32Builder).Append(row[i].(float32))
+				rowData, ok := row[i].(float32)
+				if !ok {
+					parseFloat, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 32)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to float32 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = float32(parseFloat)
+				}
+				rb.Field(i).(*array.Float32Builder).Append(rowData)
 			case types.DOUBLE:
-				rb.Field(i).(*array.Float64Builder).Append(row[i].(float64))
+				rowData, ok := row[i].(float64)
+				if !ok {
+					parseDouble, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 64)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to float64/double failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = parseDouble
+				}
+				rb.Field(i).(*array.Float64Builder).Append(rowData)
 			case types.STRING:
-				rb.Field(i).(*array.StringBuilder).Append(row[i].(string))
+				rowData, ok := row[i].(string)
+				if !ok {
+					rowData = fmt.Sprintf("%v", row[i])
+				}
+				rb.Field(i).(*array.StringBuilder).Append(rowData)
 			case types.DATE:
-				rb.Field(i).(*array.Date32Builder).Append(arrow.Date32FromTime(row[i].(time.Time)))
+				rowData, ok := row[i].(time.Time)
+				if !ok {
+					parse, err := time.Parse(field.TimeFormat, fmt.Sprintf("%v", row[i]))
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to date failed, format is [%s], err is %s", field.DataType, field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = parse
+				}
+				rb.Field(i).(*array.Date32Builder).Append(arrow.Date32FromTime(rowData))
 			// case filed , err is execution error: [Internal] [UNSUPPORTED_ARROWTYPE] Unsupported arrow type Timestamp(MILLISECOND, UTC).
 			case types.TIMESTAMP:
-				ts, err := arrow.TimestampFromTime(row[i].(time.Time), arrow.Millisecond)
+				rowData, ok := row[i].(time.Time)
+				if !ok {
+					parse, err := time.Parse(field.TimeFormat, fmt.Sprintf("%v", row[i]))
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to timestamp failed, format is [%s], err is %s", field.DataType, field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+					}
+					rowData = parse
+				}
+				ts, err := arrow.TimestampFromTime(rowData, field.TU)
 				if err != nil {
-					return nil, err
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"cast value [%s] to arrow.Timestamp failed,err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
 				}
 				rb.Field(i).(*array.TimestampBuilder).Append(ts)
 			default:

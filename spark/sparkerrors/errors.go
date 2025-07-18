@@ -40,6 +40,7 @@ func WithStringf(err error, errMsg string, params ...any) error {
 type errorType error
 
 var (
+	CreateDataFrameError          = errorType(errors.New("create dataframe error"))
 	ConnectionError               = errorType(errors.New("connection error"))
 	ReadError                     = errorType(errors.New("read error"))
 	ExecutionError                = errorType(errors.New("execution error"))

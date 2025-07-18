@@ -4,10 +4,12 @@ import "github.com/apache/arrow-go/v18/arrow"
 
 // StructField represents a field in a StructType.
 type StructField struct {
-	Name     string
-	DataType DataType
-	Nullable bool // default should be true
-	Metadata *string
+	Name       string
+	DataType   DataType
+	TimeFormat string
+	TU         arrow.TimeUnit
+	Nullable   bool // default should be true
+	Metadata   *string
 }
 
 func (t *StructField) ToArrowType() arrow.Field {
