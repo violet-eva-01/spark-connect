@@ -595,6 +595,9 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 			if row[i] == nil {
 				rb.Field(i).AppendNull()
 				continue
+			} else if row[i] == "" {
+				rb.Field(i).AppendEmptyValue()
+				continue
 			}
 			switch field.DataType {
 			case types.BOOLEAN:
