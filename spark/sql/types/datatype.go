@@ -170,7 +170,35 @@ func (t TimestampType) IsNumeric() bool {
 }
 
 func (t TimestampType) ToArrowType() arrow.DataType {
+	return arrow.FixedWidthTypes.Timestamp_s
+}
+
+type TimestampMtzType struct{}
+
+func (t TimestampMtzType) TypeName() string {
+	return getDataTypeName(t)
+}
+
+func (t TimestampMtzType) IsNumeric() bool {
+	return false
+}
+
+func (t TimestampMtzType) ToArrowType() arrow.DataType {
 	return arrow.FixedWidthTypes.Timestamp_ms
+}
+
+type TimestampUtzType struct{}
+
+func (t TimestampUtzType) TypeName() string {
+	return getDataTypeName(t)
+}
+
+func (t TimestampUtzType) IsNumeric() bool {
+	return false
+}
+
+func (t TimestampUtzType) ToArrowType() arrow.DataType {
+	return arrow.FixedWidthTypes.Timestamp_us
 }
 
 type TimestampNtzType struct{}
@@ -233,6 +261,8 @@ var (
 	DOUBLE        = DoubleType{}
 	DATE          = DateType{}
 	TIMESTAMP     = TimestampType{}
+	TIMESTAMP_MTZ = TimestampMtzType{}
+	TIMESTAMP_UTZ = TimestampUtzType{}
 	TIMESTAMP_NTZ = TimestampNtzType{}
 	STRING        = StringType{}
 )

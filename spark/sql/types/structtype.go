@@ -7,7 +7,6 @@ type StructField struct {
 	Name       string
 	DataType   DataType
 	TimeFormat string
-	TU         arrow.TimeUnit
 	Nullable   bool // default should be true
 	Metadata   *string
 }

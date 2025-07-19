@@ -263,7 +263,7 @@ func (s *sparkSessionImpl) CreateDataFrame(ctx context.Context, data [][]any, sc
 			case types.LONG:
 				rb.Field(i).(*array.Int64Builder).Append(int64(row[i].(int)))
 			case types.FLOAT:
-				rb.Field(i).(*array.Float32Builder).Append(row[i].(float32))
+				rb.Field(i).(*array.Float32Builder).Append(float32(row[i].(float32)))
 			case types.DOUBLE:
 				rb.Field(i).(*array.Float64Builder).Append(row[i].(float64))
 			case types.STRING:
@@ -345,14 +345,7 @@ func NewSparkSQL(ip string, port int, args map[string]string, retryTime int, ret
 	return
 }
 
-// convStructTags
-// @Description: get tag name & tag elem type or get elem name & tag name
-// @param data
-// @param tagName
-// @param isGetType  true , get tag name & tag elem type . false , get elem name & tag name.
-// @param splitKey
-// @return map[string]string
-func convStructTags(data any, tagName string, isGetType bool, splitKey ...string) map[string]string {
+func getStructTagValues(data any, tagName string, isGetType bool, splitKey ...string) map[string]string {
 
 	valueOf := reflect.ValueOf(data)
 	if valueOf.Kind() == reflect.Ptr {
@@ -412,13 +405,7 @@ func convStructTags(data any, tagName string, isGetType bool, splitKey ...string
 	return output
 }
 
-// structToStructType
-// @Description: isRename is false , get struct elem name convert to snake_case assign to structField name.isRename is true  , get spark tag name assign to structField name.
-// @param v
-// @param isRename
-// @return *types.StructType
-// @return error
-func structToStructType(v interface{}, isRename bool) (*types.StructType, error) {
+func getStructType(v interface{}, isRename bool) (*types.StructType, error) {
 	var (
 		fields    []types.StructField
 		sparkTags map[string]string
@@ -429,7 +416,7 @@ func structToStructType(v interface{}, isRename bool) (*types.StructType, error)
 		return nil, fmt.Errorf("expected struct type, got %T", v)
 	}
 	if isRename {
-		sparkTags = convStructTags(v, "spark", false)
+		sparkTags = getStructTagValues(v, "spark", false)
 	}
 	for i := 0; i < vf.NumField(); i++ {
 		var filed types.StructField
@@ -476,17 +463,20 @@ func structToStructType(v interface{}, isRename bool) (*types.StructType, error)
 				if len(tagValue) > 1 {
 					filed.TimeFormat = tagValue[1]
 				}
-				if len(tagValue) > 2 {
-					switch tagValue[2] {
-					case "ns":
-						filed.TU = arrow.Nanosecond
-					case "us":
-						filed.TU = arrow.Microsecond
-					case "ms":
-						filed.TU = arrow.Millisecond
-					default:
-						filed.TU = arrow.Second
-					}
+			case "timestamp_ms":
+				filed.DataType = types.TIMESTAMP_MTZ
+				if len(tagValue) > 1 {
+					filed.TimeFormat = tagValue[1]
+				}
+			case "timestamp_us":
+				filed.DataType = types.TIMESTAMP_UTZ
+				if len(tagValue) > 1 {
+					filed.TimeFormat = tagValue[1]
+				}
+			case "timestamp_ns":
+				filed.DataType = types.TIMESTAMP_NTZ
+				if len(tagValue) > 1 {
+					filed.TimeFormat = tagValue[1]
 				}
 			}
 		} else {
@@ -515,7 +505,7 @@ func structToStructType(v interface{}, isRename bool) (*types.StructType, error)
 			case string:
 				filed.DataType = types.STRING
 			case time.Time:
-				filed.DataType = types.TIMESTAMP
+				filed.DataType = types.TIMESTAMP_UTZ
 			default:
 				panic(fmt.Errorf("unsupported data type: %s", vt))
 			}
@@ -529,12 +519,7 @@ func structToStructType(v interface{}, isRename bool) (*types.StructType, error)
 	}, nil
 }
 
-// sAToTSA
-// @Description: any slice  -> any 2D slicing
-// @param structType
-// @param data
-// @return [][]interface{}
-func sAToTSA(structType *types.StructType, data ...any) [][]interface{} {
+func getData(structType *types.StructType, data ...any) [][]interface{} {
 	length := len(structType.Fields)
 	var rows [][]interface{}
 	for _, row := range data {
@@ -549,11 +534,7 @@ func sAToTSA(structType *types.StructType, data ...any) [][]interface{} {
 	return rows
 }
 
-// anyToSliceAny
-// @Description: any -> any slice
-// @param data
-// @return []interface{}
-func anyToSliceAny(data any) []interface{} {
+func dataConversion(data any) []interface{} {
 	vf := reflect.ValueOf(data)
 	if vf.Kind() != reflect.Slice && vf.Kind() == reflect.Struct {
 		return []interface{}{data}
@@ -565,25 +546,20 @@ func anyToSliceAny(data any) []interface{} {
 	return rows
 }
 
-// CreateDataFrameFromStruct
-// @Description:
-// @param ctx
-// @param data
-// @param isRename == true ,Rename the dataframe based on the spark tag , Insufficient tags are supplemented by elem name
-// @return sql.DataFrame
-// @return error
 func (s *sparkSessionImpl) CreateDataFrameFromStruct(ctx context.Context, data any, isRename bool) (DataFrame, error) {
-	rows := anyToSliceAny(data)
+	rows := dataConversion(data)
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("no data")
 	}
-	structType, err := structToStructType(rows[0], isRename)
+	structType, err := getStructType(rows[0], isRename)
 	if err != nil {
 		return nil, err
 	}
-	sliceAny := sAToTSA(structType, rows...)
+	sliceAny := getData(structType, rows...)
 	return s.createDataFrame(ctx, sliceAny, structType)
 }
+
+var TZ = time.Local
 
 func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, schema *types.StructType) (DataFrame, error) {
 	pool := memory.NewGoAllocator()
@@ -594,9 +570,6 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 		for i, field := range schema.Fields {
 			if row[i] == nil {
 				rb.Field(i).AppendNull()
-				continue
-			} else if row[i] == "" {
-				rb.Field(i).AppendEmptyValue()
 				continue
 			}
 			switch field.DataType {
@@ -686,31 +659,67 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 			case types.DATE:
 				rowData, ok := row[i].(time.Time)
 				if !ok {
-					parse, err := time.Parse(field.TimeFormat, fmt.Sprintf("%v", row[i]))
+					if row[i] == "" {
+						rb.Field(i).(*array.Date32Builder).AppendNull()
+						continue
+					}
+					parse, err := time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to date failed, format is [%s], err is %s", field.DataType, field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to date failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parse
+				} else {
+					if fmt.Sprintf("%s", time.Time{}) == fmt.Sprintf("%s", row[i]) {
+						rb.Field(i).(*array.Date32Builder).AppendNull()
+						continue
+					}
 				}
 				rb.Field(i).(*array.Date32Builder).Append(arrow.Date32FromTime(rowData))
-			// case filed , err is execution error: [Internal] [UNSUPPORTED_ARROWTYPE] Unsupported arrow type Timestamp(MILLISECOND, UTC).
-			case types.TIMESTAMP:
-				rowData, ok := row[i].(time.Time)
+			case types.TIMESTAMP, types.TIMESTAMP_MTZ, types.TIMESTAMP_UTZ, types.TIMESTAMP_NTZ:
+				var (
+					tu      arrow.TimeUnit
+					rowData arrow.Timestamp
+					err     error
+				)
+				switch field.DataType {
+				case types.TIMESTAMP:
+					tu = arrow.Second
+				case types.TIMESTAMP_MTZ:
+					tu = arrow.Millisecond
+				case types.TIMESTAMP_UTZ:
+					tu = arrow.Microsecond
+				case types.TIMESTAMP_NTZ:
+					tu = arrow.Nanosecond
+				}
+				ts, ok := row[i].(time.Time)
 				if !ok {
-					parse, err := time.Parse(field.TimeFormat, fmt.Sprintf("%v", row[i]))
+					if row[i] == "" {
+						rb.Field(i).(*array.TimestampBuilder).AppendNull()
+						continue
+					}
+					ts, err = time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to timestamp failed, format is [%s], err is %s", field.DataType, field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to time.Time failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
 					}
-					rowData = parse
+				} else {
+					if fmt.Sprintf("%s", time.Time{}) == fmt.Sprintf("%s", row[i]) {
+						rb.Field(i).(*array.TimestampBuilder).AppendNull()
+						continue
+					}
+					ts, err = time.ParseInLocation(field.TimeFormat, ts.Format(field.TimeFormat), TZ)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"cast value [%s] to time.Time failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+					}
 				}
-				ts, err := arrow.TimestampFromTime(rowData, field.TU)
+				rowData, err = arrow.TimestampFromTime(ts, tu)
 				if err != nil {
 					return nil, sparkerrors.WithType(fmt.Errorf(
-						"cast value [%s] to arrow.Timestamp failed,err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+						"cast value [%s] to arrow.Timestamp(%s, UTC) failed,err is %s", row[i], tu.String(), err), sparkerrors.CreateDataFrameError)
 				}
-				rb.Field(i).(*array.TimestampBuilder).Append(ts)
+				rb.Field(i).(*array.TimestampBuilder).Append(rowData)
 			default:
 				return nil, sparkerrors.WithType(fmt.Errorf(
 					"unsupported data type: %s", field.DataType), sparkerrors.NotImplementedError)
