@@ -4,39 +4,17 @@ package sql
 import (
 	"context"
 	"fmt"
-	"github.com/apache/arrow-go/v18/arrow"
-	"log"
 	"testing"
 	"time"
 )
 
 func TestTime(t *testing.T) {
-	//a := "2025-07-17 15:49:59.330808 +0800 CST"
-	//parse, err := time.Parse("2006-01-02 15:04:05.999999 Z0700 MST", a)
-	a := "2025-07-17 15:49:59"
-	parse, err := time.Parse("2006-01-02 15:04:05", a)
+	timeName := "2025-07-22 17"
+	parse, err := time.Parse("2006-01-02 15:04:05", timeName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(parse)
-	location, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fromString, _, err2 := arrow.TimestampFromStringInLocation(parse.Format("2006-01-02 15:04:05"), arrow.Second, location)
-	if err2 != nil {
-		log.Println(err2)
-	}
-	fmt.Println(fromString)
-	fromString1, err3 := arrow.TimestampFromTime(parse, arrow.Second)
-	if err3 != nil {
-		log.Println(err3)
-	}
-	fmt.Println(fromString1)
-	toTime := fromString1.ToTime(arrow.Second)
-	fmt.Println(toTime)
-	unix := parse.Unix()
-	fmt.Println(unix)
+	fmt.Println(parse.UTC())
 }
 
 func TestSQL(t *testing.T) {
@@ -64,11 +42,14 @@ func TestSQL(t *testing.T) {
 }
 
 type Water struct {
-	Word  string    `json:"word"  spark:"word_name"`
-	Sale  float32   `json:"sale"  spark:"sale_name" `
-	Count int64     `json:"count" spark:"count_name" sparkType:"int8"`
-	Date  time.Time `json:"date"  spark:"date_name"  sparkType:"date,2006-01-02 15:04:05"`
-	Times time.Time `json:"times" spark:"times_name" sparkType:"timestamp_us,2006-01-02 15:04:05"`
+	Bool      string    `json:"bool" spark:"bool" sparkType:"bool"`
+	ID        string    `json:"id"    spark:"id" sparkType:"int32"`
+	Word      string    `json:"word"  spark:"word_name"`
+	Sale      string    `json:"sale"  spark:"sale_name"  sparkType:"float"`
+	Count     string    `json:"count" spark:"count_name" sparkType:"int8"`
+	Date      string    `json:"date"  spark:"date_name"  sparkType:"date,2006-01-02 15:04:05"`
+	Times     string    `json:"times" spark:"times_name" sparkType:"timestamp_us,2006-01-02 15:04:05"`
+	Timestamp time.Time `json:"timestamp" spark:"timestamp_name"`
 }
 
 func TestDDL(t *testing.T) {
@@ -87,14 +68,15 @@ func TestDDL(t *testing.T) {
 		var w Water
 		if i%2 == 0 {
 			w.Word = fmt.Sprintf("w%d", i)
-			w.Sale = float32(i)
-			w.Count = int64(i)
-			w.Times = now.AddDate(0, 0, i) //.Format("2006-01-02 15:04:05.000")
+			w.Sale = fmt.Sprintf("%d", i)
+			w.Count = fmt.Sprintf("%d", i)
+			w.Times = now.AddDate(0, 0, i).Format("2006-01-02 15:04:05.000")
+			w.Timestamp = now
 		} else {
 			w.Word = fmt.Sprintf("t%d", i)
-			w.Sale = float32(i)
-			w.Count = int64(i)
-			w.Date = now.AddDate(0, 0, i) //.Format("2006-01-02 15:04:05") //.AddDate(0, 0, -i)
+			w.Sale = fmt.Sprintf("%d", i)
+			w.Count = fmt.Sprintf("%d", i)
+			w.Date = now.AddDate(0, 0, i).Format("2006-01-02 15:04:05") //.AddDate(0, 0, -i)
 		}
 		ws = append(ws, w)
 	}

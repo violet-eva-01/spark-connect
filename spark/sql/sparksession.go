@@ -194,7 +194,7 @@ func (s *sparkSessionImpl) CreateDataFrameFromArrow(ctx context.Context, data ar
 	defer w.Close()
 
 	// Create a RecordReader from the table
-	rr := array.NewTableReader(data, int64(data.NumRows()))
+	rr := array.NewTableReader(data, data.NumRows())
 	defer rr.Release()
 
 	// Read the records from the table and write them to the buffer
@@ -263,7 +263,7 @@ func (s *sparkSessionImpl) CreateDataFrame(ctx context.Context, data [][]any, sc
 			case types.LONG:
 				rb.Field(i).(*array.Int64Builder).Append(int64(row[i].(int)))
 			case types.FLOAT:
-				rb.Field(i).(*array.Float32Builder).Append(float32(row[i].(float32)))
+				rb.Field(i).(*array.Float32Builder).Append(row[i].(float32))
 			case types.DOUBLE:
 				rb.Field(i).(*array.Float64Builder).Append(row[i].(float64))
 			case types.STRING:
@@ -571,6 +571,15 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 			if row[i] == nil {
 				rb.Field(i).AppendNull()
 				continue
+			} else if row[i] == "" {
+				switch field.DataType {
+				case types.TIMESTAMP, types.TIMESTAMP_MTZ, types.TIMESTAMP_UTZ, types.TIMESTAMP_NTZ, types.DATE:
+					rb.Field(i).AppendNull()
+					continue
+				default:
+					rb.Field(i).AppendEmptyValue()
+					continue
+				}
 			}
 			switch field.DataType {
 			case types.BOOLEAN:
@@ -579,7 +588,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseBool, err := strconv.ParseBool(fmt.Sprintf("%v", row[i]))
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to bool failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to bool failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseBool
 				}
@@ -590,7 +599,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseByte, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 8)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int8 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to int8 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int8(parseByte)
 				}
@@ -601,7 +610,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseShort, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 16)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int16 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to int16 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int16(parseShort)
 				}
@@ -612,7 +621,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseInt, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 32)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int32 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to int32 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int32(parseInt)
 				}
@@ -623,7 +632,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseLong, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 64)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int64 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to int64 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseLong
 				}
@@ -634,7 +643,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseFloat, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 32)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to float32 failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to float32 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = float32(parseFloat)
 				}
@@ -645,7 +654,7 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseDouble, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 64)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to float64/double failed, err is %s", field.DataType, err), sparkerrors.CreateDataFrameError)
+							"cast value [%s] to float64/double failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseDouble
 				}
@@ -659,10 +668,6 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 			case types.DATE:
 				rowData, ok := row[i].(time.Time)
 				if !ok {
-					if row[i] == "" {
-						rb.Field(i).(*array.Date32Builder).AppendNull()
-						continue
-					}
 					parse, err := time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
@@ -694,10 +699,6 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 				}
 				ts, ok := row[i].(time.Time)
 				if !ok {
-					if row[i] == "" {
-						rb.Field(i).(*array.TimestampBuilder).AppendNull()
-						continue
-					}
 					ts, err = time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
@@ -707,11 +708,6 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					if fmt.Sprintf("%s", time.Time{}) == fmt.Sprintf("%s", row[i]) {
 						rb.Field(i).(*array.TimestampBuilder).AppendNull()
 						continue
-					}
-					ts, err = time.ParseInLocation(field.TimeFormat, ts.Format(field.TimeFormat), TZ)
-					if err != nil {
-						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to time.Time failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
 					}
 				}
 				rowData, err = arrow.TimestampFromTime(ts, tu)
