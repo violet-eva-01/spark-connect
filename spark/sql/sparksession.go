@@ -309,6 +309,9 @@ func SparkConnServer(ip string, port int, args map[string]string, ctxL ...contex
 	if args != nil && len(args) > 0 {
 		param = "/"
 		for k, v := range args {
+			if k == "user" {
+				param += fmt.Sprintf(";%s=%s", "user_id", v)
+			}
 			param += fmt.Sprintf(";%s=%s", k, v)
 		}
 		remote += param

@@ -187,9 +187,6 @@ func NewBuilder(connection string) (*BaseBuilder, error) {
 				cb.token = props[1]
 			} else if props[0] == "user_id" {
 				cb.user = props[1]
-			} else if props[0] == "username" {
-				cb.user = props[1]
-				cb.headers[props[0]] = props[1]
 			} else if props[0] == "session_id" {
 				cb.sessionId = props[1]
 			} else if props[0] == "user_agent" {

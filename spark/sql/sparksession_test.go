@@ -19,10 +19,8 @@ func TestTime(t *testing.T) {
 
 func TestSQL(t *testing.T) {
 	params := make(map[string]string)
-	params["username"] = "violet-eva"
-	params["username_auth"] = "5TRyuMpZClX4bSiZ2eAapg"
-	// 127.0.0.1
-	params["address_auth"] = "liIgrWj6TMHTW9hTiWLYNQ"
+	params["user"] = "violet-eva"
+	params["user_auth"] = "5TRyuMpZClX4bSiZ2eAapg"
 	sql, err := SparkConnServer("127.0.0.1", 15002, params)
 	if err != nil {
 		t.Fatal(err)
