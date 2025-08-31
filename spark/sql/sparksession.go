@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"google.golang.org/grpc"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +36,7 @@ type SparkSession interface {
 	CreateDataFrameFromArrow(ctx context.Context, data arrow.Table) (DataFrame, error)
 	CreateDataFrame(ctx context.Context, data [][]any, schema *types.StructType) (DataFrame, error)
 	Config() client.RuntimeConfig
-	CreateDataFrameFromStruct(ctx context.Context, data any, isRename bool) (DataFrame, error)
+	CreateDataFrameFromStruct(ctx context.Context, data any) (DataFrame, error)
 }
 
 // NewSessionBuilder creates a new session builder for starting a new spark session
@@ -290,7 +289,7 @@ func (s *sparkSessionImpl) CreateDataFrame(ctx context.Context, data [][]any, sc
 	return s.CreateDataFrameFromArrow(ctx, tbl)
 }
 
-func SparkConnServer(ip string, port int, args map[string]string, ctxL ...context.Context) (SparkSession, error) {
+func NewSparkSQL(ip string, port int, args map[string]string, ctxL ...context.Context) (SparkSession, error) {
 	var (
 		param    string
 		remote   = fmt.Sprintf("sc://%s:%d", ip, port)
@@ -333,186 +332,130 @@ func SparkConnServer(ip string, port int, args map[string]string, ctxL ...contex
 	return sparkSQL, nil
 }
 
-func NewSparkSQL(ip string, port int, args map[string]string, retryTime int, retryInterval time.Duration, ctxL ...context.Context) (conn SparkSession, err error) {
-	for i := 0; i < retryTime; i++ {
-		conn, err = SparkConnServer(ip, port, args, ctxL...)
-		if err != nil {
-			if i != retryTime-1 {
-				time.Sleep(retryInterval * time.Second)
-				continue
-			} else {
-				return nil, fmt.Errorf("connect spark connect server failed ,err is %s", err)
-			}
-		}
-	}
-	return
-}
-
-func getStructTagValues(data any, tagName string, isGetType bool, splitKey ...string) map[string]string {
-
-	valueOf := reflect.ValueOf(data)
-	if valueOf.Kind() == reflect.Ptr {
-		valueOf = valueOf.Elem()
-	}
-	if valueOf.Kind() != reflect.Struct {
-		return nil
-	}
-
-	output := make(map[string]string, valueOf.NumField())
-	if len(splitKey) > 0 {
-		for i := 0; i < valueOf.NumField(); i++ {
-			field := valueOf.Type().Field(i)
-			tag := field.Tag
-			tagValue := tag.Get(tagName)
-			var fieldType string
-			if isGetType {
-				fieldType = field.Type.String()
-			} else {
-				fieldType = field.Name
-			}
-			if tagValue != "" {
-				splitValue := strings.Split(tagValue, ",")
-				for _, Value := range splitValue {
-					if strings.HasPrefix(Value, splitKey[0]) {
-						columnName := strings.TrimPrefix(Value, splitKey[0])
-						if isGetType {
-							output[columnName] = fieldType
-						} else {
-							output[fieldType] = columnName
-						}
-					}
-				}
-			}
-		}
-	} else {
-		for i := 0; i < valueOf.NumField(); i++ {
-			field := valueOf.Type().Field(i)
-			tag := field.Tag
-			tagValue := tag.Get(tagName)
-			var fieldType string
-			if isGetType {
-				fieldType = field.Type.String()
-			} else {
-				fieldType = field.Name
-			}
-			if isGetType {
-				// tag name : elem type
-				output[tagValue] = fieldType
-			} else {
-				// elem name : tag name
-				output[fieldType] = tagValue
-			}
-		}
-	}
-
-	return output
-}
-
-func getStructType(v interface{}, isRename bool) (*types.StructType, error) {
+func getStructType(v interface{}) (*types.StructType, error) {
 	var (
-		fields    []types.StructField
-		sparkTags map[string]string
+		fields []types.StructField
 	)
 	vf := reflect.ValueOf(v)
 	tf := reflect.TypeOf(v)
+	sparkTags := types.ExtractSparkTags(v)
 	if tf.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("expected struct type, got %T", v)
 	}
-	if isRename {
-		sparkTags = getStructTagValues(v, "spark", false)
-	}
+
 	for i := 0; i < vf.NumField(); i++ {
 		var filed types.StructField
-		if isRename {
-			filed.Name = sparkTags[tf.Field(i).Name]
-		}
-		if filed.Name == "" {
+
+		if sparkTags[tf.Field(i).Name].Column != "" {
+			filed.Name = sparkTags[tf.Field(i).Name].Column
+		} else {
 			filed.Name = tf.Field(i).Name
 		}
-		if sparkTypeTag := tf.Field(i).Tag.Get("sparkType"); sparkTypeTag != "" {
-			tagValue := strings.Split(sparkTypeTag, ",")
-			sparkType := tagValue[0]
-			switch sparkType {
+
+		if tag := sparkTags[tf.Field(i).Name]; tag.Type != "" {
+			switch tag.Type {
 			case "bool":
 				filed.DataType = types.BOOLEAN
-			case "int":
-				switch runtime.GOARCH {
-				case "386", "arm":
-					filed.DataType = types.INTEGER
-				default:
-					filed.DataType = types.LONG
-				}
+			case "[]bool":
+				filed.DataType = types.BOOLEAN_SLICE
 			case "int8":
 				filed.DataType = types.BYTE
+			case "[]int8":
+				filed.DataType = types.BYTE_SLICE
 			case "int16":
 				filed.DataType = types.SHORT
-			case "int32":
+			case "[]int16":
+				filed.DataType = types.SHORT_SLICE
+			case "int", "int32":
 				filed.DataType = types.INTEGER
+			case "[]int", "[]int32":
+				filed.DataType = types.INTEGER_SLICE
 			case "int64":
 				filed.DataType = types.LONG
+			case "[]int64":
+				filed.DataType = types.LONG_SLICE
 			case "float32", "float":
 				filed.DataType = types.FLOAT
+			case "[]float32", "[]float":
+				filed.DataType = types.FLOAT_SLICE
 			case "float64", "double":
 				filed.DataType = types.DOUBLE
+			case "[]float64", "[]double":
+				filed.DataType = types.DOUBLE_SLICE
 			case "string":
 				filed.DataType = types.STRING
+			case "[]string":
+				filed.DataType = types.STRING_SLICE
 			case "date":
 				filed.DataType = types.DATE
-				if len(tagValue) > 1 {
-					filed.TimeFormat = tagValue[1]
-				}
+			case "[]date":
+				filed.DataType = types.DATE_SLICE
 			case "timestamp":
 				filed.DataType = types.TIMESTAMP
-				if len(tagValue) > 1 {
-					filed.TimeFormat = tagValue[1]
-				}
+			case "[]timestamp":
+				filed.DataType = types.TIMESTAMP_SLICE
 			case "timestamp_ms":
 				filed.DataType = types.TIMESTAMP_MTZ
-				if len(tagValue) > 1 {
-					filed.TimeFormat = tagValue[1]
-				}
+			case "[]timestamp_ms":
+				filed.DataType = types.TIMESTAMP_MTZ_SLICE
 			case "timestamp_us":
 				filed.DataType = types.TIMESTAMP_UTZ
-				if len(tagValue) > 1 {
-					filed.TimeFormat = tagValue[1]
-				}
+			case "[]timestamp_us":
+				filed.DataType = types.TIMESTAMP_UTZ_SLICE
 			case "timestamp_ns":
 				filed.DataType = types.TIMESTAMP_NTZ
-				if len(tagValue) > 1 {
-					filed.TimeFormat = tagValue[1]
-				}
+			case "[]timestamp_ns":
+				filed.DataType = types.TIMESTAMP_NTZ_SLICE
+			default:
+				panic(fmt.Errorf("unsupported data type: %s", tag.Type))
 			}
 		} else {
 			switch vt := vf.Field(i).Interface().(type) {
-			case int:
-				switch runtime.GOARCH {
-				case "386", "arm":
-					filed.DataType = types.INTEGER
-				default:
-					filed.DataType = types.LONG
-				}
 			case bool:
 				filed.DataType = types.BOOLEAN
+			case []bool:
+				filed.DataType = types.BOOLEAN_SLICE
 			case int8:
 				filed.DataType = types.BYTE
+			case []int8:
+				filed.DataType = types.BYTE_SLICE
 			case int16:
 				filed.DataType = types.SHORT
-			case int32:
+			case []int16:
+				filed.DataType = types.SHORT_SLICE
+			case int, int32:
 				filed.DataType = types.INTEGER
+			case []int, []int32:
+				filed.DataType = types.INTEGER_SLICE
 			case int64:
 				filed.DataType = types.LONG
+			case []int64:
+				filed.DataType = types.LONG_SLICE
 			case float32:
 				filed.DataType = types.FLOAT
+			case []float32:
+				filed.DataType = types.FLOAT_SLICE
 			case float64:
 				filed.DataType = types.DOUBLE
+			case []float64:
+				filed.DataType = types.DOUBLE_SLICE
 			case string:
 				filed.DataType = types.STRING
+			case []string:
+				filed.DataType = types.STRING_SLICE
 			case time.Time:
 				filed.DataType = types.TIMESTAMP_UTZ
+			case []time.Time:
+				filed.DataType = types.TIMESTAMP_UTZ_SLICE
 			default:
 				panic(fmt.Errorf("unsupported data type: %s", vt))
 			}
 		}
+
+		if sparkTags[tf.Field(i).Name].Format != "" {
+			filed.Format = sparkTags[tf.Field(i).Name].Format
+		}
+
 		filed.Metadata = nil
 		filed.Nullable = true
 		fields = append(fields, filed)
@@ -549,12 +492,12 @@ func dataConversion(data any) []interface{} {
 	return rows
 }
 
-func (s *sparkSessionImpl) CreateDataFrameFromStruct(ctx context.Context, data any, isRename bool) (DataFrame, error) {
+func (s *sparkSessionImpl) CreateDataFrameFromStruct(ctx context.Context, data any) (DataFrame, error) {
 	rows := dataConversion(data)
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("no data")
 	}
-	structType, err := getStructType(rows[0], isRename)
+	structType, err := getStructType(rows[0])
 	if err != nil {
 		return nil, err
 	}
@@ -583,6 +526,9 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					rb.Field(i).AppendEmptyValue()
 					continue
 				}
+			} else if row[i] == "[]" {
+				rb.Field(i).AppendEmptyValue()
+				continue
 			}
 			switch field.DataType {
 			case types.BOOLEAN:
@@ -591,90 +537,191 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					parseBool, err := strconv.ParseBool(fmt.Sprintf("%v", row[i]))
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to bool failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to bool failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseBool
 				}
 				rb.Field(i).(*array.BooleanBuilder).Append(rowData)
+			case types.BOOLEAN_SLICE:
+				rowData, ok := row[i].([]bool)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []bool failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, rd := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.BooleanBuilder).Append(rd)
+				}
 			case types.BYTE:
 				rowData, ok := row[i].(int8)
 				if !ok {
 					parseByte, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 8)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int8 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to int8 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int8(parseByte)
 				}
 				rb.Field(i).(*array.Int8Builder).Append(rowData)
+			case types.BYTE_SLICE:
+				rowData, ok := row[i].([]int8)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []int8 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, rd := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Int8Builder).Append(rd)
+				}
 			case types.SHORT:
 				rowData, ok := row[i].(int16)
 				if !ok {
 					parseShort, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 16)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int16 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to int16 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int16(parseShort)
 				}
 				rb.Field(i).(*array.Int16Builder).Append(rowData)
+			case types.SHORT_SLICE:
+				rowData, ok := row[i].([]int16)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []int16 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, rd := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Int16Builder).Append(rd)
+				}
 			case types.INTEGER:
 				rowData, ok := row[i].(int32)
 				if !ok {
 					parseInt, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 32)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int32 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to int32 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = int32(parseInt)
 				}
 				rb.Field(i).(*array.Int32Builder).Append(rowData)
+			case types.INTEGER_SLICE:
+				switch row[i].(type) {
+				case []int:
+					rowData, ok := row[i].([]int)
+					if !ok {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"field [%s] cast value [%s] to []int32 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+					}
+					rb.Field(i).(*array.ListBuilder).Append(true)
+					for _, rd := range rowData {
+						rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Int32Builder).Append(int32(rd))
+					}
+				case []int32:
+					rowData, ok := row[i].([]int32)
+					if !ok {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"field [%s] cast value [%s] to []int32 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+					}
+					rb.Field(i).(*array.ListBuilder).Append(true)
+					for _, b := range rowData {
+						rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Int32Builder).Append(b)
+					}
+				}
 			case types.LONG:
 				rowData, ok := row[i].(int64)
 				if !ok {
 					parseLong, err := strconv.ParseInt(fmt.Sprintf("%v", row[i]), 10, 64)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to int64 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to int64 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseLong
 				}
 				rb.Field(i).(*array.Int64Builder).Append(rowData)
+			case types.LONG_SLICE:
+				rowData, ok := row[i].([]int64)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []int64 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, b := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Int64Builder).Append(b)
+				}
 			case types.FLOAT:
 				rowData, ok := row[i].(float32)
 				if !ok {
 					parseFloat, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 32)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to float32 failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to float32 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = float32(parseFloat)
 				}
 				rb.Field(i).(*array.Float32Builder).Append(rowData)
+			case types.FLOAT_SLICE:
+				rowData, ok := row[i].([]float32)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []float32 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, b := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Float32Builder).Append(b)
+				}
 			case types.DOUBLE:
 				rowData, ok := row[i].(float64)
 				if !ok {
 					parseDouble, err := strconv.ParseFloat(fmt.Sprintf("%v", row[i]), 64)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to float64/double failed, err is %s", row[i], err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to float64 failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parseDouble
 				}
 				rb.Field(i).(*array.Float64Builder).Append(rowData)
+			case types.DOUBLE_SLICE:
+				rowData, ok := row[i].([]float64)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []float64 failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, b := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Float64Builder).Append(b)
+				}
 			case types.STRING:
 				rowData, ok := row[i].(string)
 				if !ok {
 					rowData = fmt.Sprintf("%v", row[i])
 				}
 				rb.Field(i).(*array.StringBuilder).Append(rowData)
+			case types.STRING_SLICE:
+				rowData, ok := row[i].([]string)
+				if !ok {
+					if field.Format == "" {
+						rowData = strings.Fields(fmt.Sprintf("%v", row[i]))
+					} else {
+						rowData = strings.Split(fmt.Sprintf("%v", row[i]), field.Format)
+					}
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, str := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.StringBuilder).Append(str)
+				}
 			case types.DATE:
 				rowData, ok := row[i].(time.Time)
 				if !ok {
-					parse, err := time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
+					format := "2006-01-02 15:04:05"
+					if field.Format != "" {
+						format = field.Format
+					}
+					// 2006-01-02 格式数据跨时区转换可能会导致时间转换异常，推荐使用 2006-01-02 15:04:05 格式转换数据。
+					parse, err := time.ParseInLocation(format, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to date failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to time.Time failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 					rowData = parse
 				} else {
@@ -684,6 +731,16 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 					}
 				}
 				rb.Field(i).(*array.Date32Builder).Append(arrow.Date32FromTime(rowData))
+			case types.DATE_SLICE:
+				rowData, ok := row[i].([]time.Time)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []time.Time failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, b := range rowData {
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.Date32Builder).Append(arrow.Date32FromTime(b))
+				}
 			case types.TIMESTAMP, types.TIMESTAMP_MTZ, types.TIMESTAMP_UTZ, types.TIMESTAMP_NTZ:
 				var (
 					tu      arrow.TimeUnit
@@ -702,10 +759,14 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 				}
 				ts, ok := row[i].(time.Time)
 				if !ok {
-					ts, err = time.ParseInLocation(field.TimeFormat, fmt.Sprintf("%s", row[i]), TZ)
+					format := "2006-01-02 15:04:05"
+					if field.Format != "" {
+						format = field.Format
+					}
+					ts, err = time.ParseInLocation(format, fmt.Sprintf("%s", row[i]), TZ)
 					if err != nil {
 						return nil, sparkerrors.WithType(fmt.Errorf(
-							"cast value [%s] to time.Time failed, format is [%s], err is %s", row[i], field.TimeFormat, err), sparkerrors.CreateDataFrameError)
+							"field [%s] cast value [%s] to time.Time failed, err is %s", field.Name, row[i], err), sparkerrors.CreateDataFrameError)
 					}
 				} else {
 					if fmt.Sprintf("%s", time.Time{}) == fmt.Sprintf("%s", row[i]) {
@@ -716,9 +777,44 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 				rowData, err = arrow.TimestampFromTime(ts, tu)
 				if err != nil {
 					return nil, sparkerrors.WithType(fmt.Errorf(
-						"cast value [%s] to arrow.Timestamp(%s, UTC) failed,err is %s", row[i], tu.String(), err), sparkerrors.CreateDataFrameError)
+						"field [%s] cast value [%s] to arrow.Timestamp(%s, UTC) failed, err is %s", field.Name, row[i], tu.String(), err), sparkerrors.CreateDataFrameError)
 				}
 				rb.Field(i).(*array.TimestampBuilder).Append(rowData)
+			case types.TIMESTAMP_SLICE, types.TIMESTAMP_MTZ_SLICE, types.TIMESTAMP_UTZ_SLICE, types.TIMESTAMP_NTZ_SLICE:
+				var (
+					tu      arrow.TimeUnit
+					rowData arrow.Timestamp
+					err     error
+				)
+				switch field.DataType {
+				case types.TIMESTAMP_SLICE:
+					tu = arrow.Second
+				case types.TIMESTAMP_MTZ_SLICE:
+					tu = arrow.Millisecond
+				case types.TIMESTAMP_UTZ_SLICE:
+					tu = arrow.Microsecond
+				case types.TIMESTAMP_NTZ_SLICE:
+					tu = arrow.Nanosecond
+				}
+				ts, ok := row[i].([]time.Time)
+				if !ok {
+					return nil, sparkerrors.WithType(fmt.Errorf(
+						"field [%s] cast value [%s] to []time.Time failed", field.Name, row[i]), sparkerrors.CreateDataFrameError)
+				} else {
+					if fmt.Sprintf("%s", []time.Time{}) == fmt.Sprintf("%s", row[i]) {
+						rb.Field(i).(*array.ListBuilder).AppendEmptyValue()
+						continue
+					}
+				}
+				rb.Field(i).(*array.ListBuilder).Append(true)
+				for _, b := range ts {
+					rowData, err = arrow.TimestampFromTime(b, tu)
+					if err != nil {
+						return nil, sparkerrors.WithType(fmt.Errorf(
+							"field [%s] cast value [%s] to []arrow.Timestamp(%s, UTC) failed,err is %s", field.Name, row[i], tu.String(), err), sparkerrors.CreateDataFrameError)
+					}
+					rb.Field(i).(*array.ListBuilder).ValueBuilder().(*array.TimestampBuilder).Append(rowData)
+				}
 			default:
 				return nil, sparkerrors.WithType(fmt.Errorf(
 					"unsupported data type: %s", field.DataType), sparkerrors.NotImplementedError)
