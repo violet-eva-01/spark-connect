@@ -439,6 +439,23 @@ func (t DateSliceType) ToArrowType() arrow.DataType {
 	return arrow.ListOf(arrow.FixedWidthTypes.Date32)
 }
 
+type MapType struct {
+	KeyFiled   arrow.Field
+	ValueFiled arrow.Field
+}
+
+func (t MapType) TypeName() string {
+	return getDataTypeName(t)
+}
+
+func (t MapType) IsNumeric() bool {
+	return false
+}
+
+func (t MapType) ToArrowType() arrow.DataType {
+	return arrow.MapOfFields(t.KeyFiled, t.ValueFiled)
+}
+
 type UnsupportedType struct {
 	TypeInfo any
 }
@@ -488,4 +505,5 @@ var (
 	TIMESTAMP_UTZ_SLICE = TimestampUtzSliceType{}
 	TIMESTAMP_NTZ_SLICE = TimestampNtzSliceType{}
 	STRING_SLICE        = StringSliceType{}
+	MAP                 = MapType{}
 )
