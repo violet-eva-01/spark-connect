@@ -513,7 +513,6 @@ func (s *sparkSessionImpl) createDataFrame(ctx context.Context, data [][]any, sc
 	for _, row := range data {
 		for i, field := range schema.Fields {
 			switch field.DataType {
-			case types.MAP:
 			default:
 				if err := fieldBuilder(i, field, rb, row); err != nil {
 					return nil, err
